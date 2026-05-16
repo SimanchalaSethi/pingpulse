@@ -1,0 +1,179 @@
+name: CI — Typecheck, Test, Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── 1. TypeScript compilation check ──────────────────────────────────────
+  typecheck:
+    name: TypeCheck — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api-gateway, auth-service, notification-service, delivery-service, analytics-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - name: Install deps
+        working-directory: services/${{ matrix.service }}
+        run: npm install
+
+      - name: TypeScript compile
+        working-directory: services/${{ matrix.service }}
+        run: npx tsc --noEmit
+
+  # ── 2. Integration tests (requires real backing services) ─────────────────
+  test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      postgres-auth:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB:       auth_db
+          POSTGRES_USER:     postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-retries 10
+
+      postgres-notifications:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB:       notifications_db
+          POSTGRES_USER:     postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-retries 10
+
+      postgres-analytics:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB:       analytics_db
+          POSTGRES_USER:     postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5434:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply database schemas
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d auth_db          -f database/auth/init.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -p 5433 -d notifications_db -f database/notifications/init.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -p 5434 -d analytics_db    -f database/analytics/init.sql
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Test auth-service
+        working-directory: services/auth-service
+        run: |
+          npm install
+          npm test --if-present
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB:   auth_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          JWT_SECRET: test-secret
+          REDIS_HOST: localhost
+
+      - name: Test notification-service
+        working-directory: services/notification-service
+        run: |
+          npm install
+          npm test --if-present
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5433
+          POSTGRES_DB:   notifications_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          REDIS_HOST: localhost
+
+      - name: Test analytics-service
+        working-directory: services/analytics-service
+        run: |
+          npm install
+          npm test --if-present
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5434
+          POSTGRES_DB:   analytics_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          REDIS_HOST: localhost
+
+  # ── 3. Docker build validation ────────────────────────────────────────────
+  build-images:
+    name: Docker Build — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: [typecheck]
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api-gateway, auth-service, notification-service, delivery-service, analytics-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/${{ matrix.service }}/Dockerfile
+          push: false
+          tags: pingpulse/${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  build-frontend:
+    name: Docker Build — frontend
+    runs-on: ubuntu-latest
+    needs: [typecheck]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          tags: pingpulse/frontend:${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend

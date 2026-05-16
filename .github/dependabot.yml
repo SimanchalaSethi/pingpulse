@@ -1,0 +1,139 @@
+version: 2
+
+updates:
+  # Root workspace
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: "Australia/Sydney"
+    groups:
+      dev-dependencies:
+        dependency-type: development
+    labels:
+      - dependencies
+
+  # Individual services
+  - package-ecosystem: npm
+    directory: "/services/api-gateway"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - api-gateway
+
+  - package-ecosystem: npm
+    directory: "/services/auth-service"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - auth-service
+
+  - package-ecosystem: npm
+    directory: "/services/notification-service"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - notification-service
+
+  - package-ecosystem: npm
+    directory: "/services/delivery-service"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - delivery-service
+
+  - package-ecosystem: npm
+    directory: "/services/analytics-service"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - analytics-service
+
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - frontend
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci
+
+  # Docker base images
+  - package-ecosystem: docker
+    directory: "/services/api-gateway"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: "/services/auth-service"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: "/services/notification-service"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: "/services/delivery-service"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: "/services/analytics-service"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: "/frontend"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - docker
+
+  # Terraform
+  - package-ecosystem: terraform
+    directory: "/infrastructure/terraform/environments/production"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - terraform

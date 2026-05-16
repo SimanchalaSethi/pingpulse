@@ -1,0 +1,287 @@
+# PingPulse — 5 independent microservices + 3 backing services
+# Each service has its own PostgreSQL database (database-per-service pattern)
+# Services communicate via REST (sync) and Redis Streams (async/event-driven)
+
+services:
+  # ── Backing Services ──────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    container_name: pp-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - pingpulse-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Separate PostgreSQL database per service — enforces service independence
+  postgres-auth:
+    image: postgres:15-alpine
+    container_name: pp-postgres-auth
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+      - ./database/auth/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - pingpulse-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-notifications:
+    image: postgres:15-alpine
+    container_name: pp-postgres-notifications
+    environment:
+      POSTGRES_DB: notifications_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_notifications_data:/var/lib/postgresql/data
+      - ./database/notifications/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - pingpulse-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-analytics:
+    image: postgres:15-alpine
+    container_name: pp-postgres-analytics
+    environment:
+      POSTGRES_DB: analytics_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_analytics_data:/var/lib/postgresql/data
+      - ./database/analytics/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - pingpulse-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Mailhog — local SMTP server for catching emails in dev (no real emails sent)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: pp-mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI: http://localhost:8025
+    networks:
+      - pingpulse-network
+
+  # ── Microservices ─────────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: pp-auth-service
+    image: pingpulse/auth-service:latest
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      NODE_ENV: development
+      POSTGRES_HOST: postgres-auth
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      JWT_SECRET: dev-jwt-secret-change-in-production
+      JWT_EXPIRES_IN: 7d
+    ports:
+      - "3001:3001"
+    networks:
+      - pingpulse-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: pp-notification-service
+    image: pingpulse/notification-service:latest
+    depends_on:
+      postgres-notifications:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 3002
+      NODE_ENV: development
+      POSTGRES_HOST: postgres-notifications
+      POSTGRES_DB: notifications_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3002:3002"
+    networks:
+      - pingpulse-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  delivery-service:
+    build:
+      context: .
+      dockerfile: services/delivery-service/Dockerfile
+    image: pingpulse/delivery-service:latest
+    depends_on:
+      redis:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    environment:
+      PORT: 3003
+      NODE_ENV: development
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NOTIFICATION_SERVICE_URL: http://notification-service:3002
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_FROM: noreply@pingpulse.local
+    networks:
+      - pingpulse-network
+    deploy:
+      replicas: 2    # Multiple delivery workers — consumer group distributes work between them
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    container_name: pp-analytics-service
+    image: pingpulse/analytics-service:latest
+    depends_on:
+      postgres-analytics:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 3004
+      NODE_ENV: development
+      POSTGRES_HOST: postgres-analytics
+      POSTGRES_DB: analytics_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3004:3004"
+    networks:
+      - pingpulse-network
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: pp-api-gateway
+    image: pingpulse/api-gateway:latest
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      NODE_ENV: development
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AUTH_SERVICE_URL: http://auth-service:3001
+      NOTIFICATION_SERVICE_URL: http://notification-service:3002
+      ANALYTICS_SERVICE_URL: http://analytics-service:3004
+      RATE_LIMIT_PER_MINUTE: 300
+    ports:
+      - "3000:3000"
+    networks:
+      - pingpulse-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Frontend ──────────────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pp-frontend
+    image: pingpulse/frontend:latest
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+    networks:
+      - pingpulse-network
+
+  # ── Observability ──────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: pp-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - pingpulse-network
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: pp-grafana
+    ports:
+      - "3005:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    networks:
+      - pingpulse-network
+
+networks:
+  pingpulse-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  postgres_auth_data:
+  postgres_notifications_data:
+  postgres_analytics_data:
+  grafana_data:

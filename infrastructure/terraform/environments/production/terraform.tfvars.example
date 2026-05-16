@@ -1,0 +1,33 @@
+# Copy to terraform.tfvars and fill in your values
+# terraform.tfvars is gitignored — never commit real values
+
+project_name = "pingpulse"
+environment  = "production"
+aws_region   = "ap-southeast-2"    # Sydney — change to your region
+
+vpc_cidr = "10.0.0.0/16"
+
+eks_cluster_version = "1.31"
+
+# t3.medium = 2 vCPU / 4 GB — enough for all 5 services
+eks_node_groups = {
+  general = {
+    instance_types = ["t3.medium"]
+    capacity_type  = "ON_DEMAND"
+    desired_size   = 2
+    min_size       = 1
+    max_size       = 10
+  }
+}
+
+# db.t3.micro = cheapest tier (~$15/month)
+# For production traffic: db.t3.small or db.t3.medium
+rds_instance_class      = "db.t3.micro"
+rds_allocated_storage   = 20
+rds_multi_az            = false   # set true for production HA
+rds_deletion_protection = true
+rds_skip_final_snapshot = false
+
+# cache.t3.micro = cheapest tier (~$12/month)
+elasticache_node_type = "cache.t3.micro"
+elasticache_num_nodes = 1   # set 2 for HA with auto-failover

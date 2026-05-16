@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delivery-service
+  namespace: pingpulse
+  labels:
+    app: delivery-service
+spec:
+  replicas: 2    # Consumer group distributes messages across all replicas
+  selector:
+    matchLabels:
+      app: delivery-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: delivery-service
+    spec:
+      terminationGracePeriodSeconds: 60   # longer grace for in-flight SMTP/webhook
+      containers:
+        - name: delivery-service
+          image: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/pingpulse/delivery-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3003
+          env:
+            - name: PORT
+              value: "3003"
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: NODE_ENV
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: REDIS_PORT
+            - name: NOTIFICATION_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: NOTIFICATION_SERVICE_URL
+            - name: SMTP_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: SMTP_HOST
+            - name: SMTP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: SMTP_PORT
+            - name: SMTP_FROM
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: SMTP_FROM
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pingpulse-secrets
+                  key: SMTP_USER
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pingpulse-secrets
+                  key: SMTP_PASSWORD
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"

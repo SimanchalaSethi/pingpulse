@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: pingpulse
+  labels:
+    app: api-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api-gateway
+          image: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/pingpulse/api-gateway:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: NODE_ENV
+            - name: AUTH_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: AUTH_SERVICE_URL
+            - name: NOTIFICATION_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: NOTIFICATION_SERVICE_URL
+            - name: ANALYTICS_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: ANALYTICS_SERVICE_URL
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: REDIS_PORT
+            - name: RATE_LIMIT_PER_MINUTE
+              valueFrom:
+                configMapKeyRef:
+                  name: pingpulse-config
+                  key: RATE_LIMIT_PER_MINUTE
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

@@ -1,0 +1,23 @@
+{
+  "name": "pingpulse",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "install:all": "npm install",
+    "dev": "concurrently -n gateway,auth,notif,delivery,analytics -c cyan,green,yellow,magenta,blue \"npm run dev -w @pingpulse/api-gateway\" \"npm run dev -w @pingpulse/auth-service\" \"npm run dev -w @pingpulse/notification-service\" \"npm run dev -w @pingpulse/delivery-service\" \"npm run dev -w @pingpulse/analytics-service\"",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:build": "docker compose build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}

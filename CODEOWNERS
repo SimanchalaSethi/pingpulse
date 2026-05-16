@@ -1,0 +1,24 @@
+# CODEOWNERS
+# Each line is a file pattern followed by one or more owners.
+# Order matters — the last matching pattern wins.
+
+# Global fallback — repo owner reviews everything
+* @SimanchalaSethi
+
+# Service boundaries
+/services/api-gateway/       @SimanchalaSethi
+/services/auth-service/      @SimanchalaSethi
+/services/notification-service/ @SimanchalaSethi
+/services/delivery-service/  @SimanchalaSethi
+/services/analytics-service/ @SimanchalaSethi
+
+# Infrastructure — require explicit review on infra changes
+/infrastructure/             @SimanchalaSethi
+/k8s/                        @SimanchalaSethi
+/.github/workflows/          @SimanchalaSethi
+
+# Frontend
+/frontend/                   @SimanchalaSethi
+
+# Shared contracts — any change here affects all services
+/shared/                     @SimanchalaSethi

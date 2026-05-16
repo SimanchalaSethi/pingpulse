@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: api-gateway
+    static_configs:
+      - targets: ["api-gateway:3000"]
+    metrics_path: /metrics
+
+  - job_name: auth-service
+    static_configs:
+      - targets: ["auth-service:3001"]
+
+  - job_name: notification-service
+    static_configs:
+      - targets: ["notification-service:3002"]
+
+  - job_name: delivery-service
+    static_configs:
+      - targets: ["delivery-service:3003"]
+
+  - job_name: analytics-service
+    static_configs:
+      - targets: ["analytics-service:3004"]

@@ -1,0 +1,45 @@
+# Non-secret configuration shared across services.
+# Replace placeholder values with actual Terraform outputs.
+# Run: make k8s-configmap  (or see scripts/k8s-apply.sh)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pingpulse-config
+  namespace: pingpulse
+data:
+  # ── Service discovery (internal Kubernetes DNS) ──────────────────────
+  AUTH_SERVICE_URL:         "http://auth-service:3001"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:3002"
+  ANALYTICS_SERVICE_URL:    "http://analytics-service:3004"
+
+  # ── Redis (replace with Terraform output: redis_endpoint) ────────────
+  REDIS_HOST: "REPLACE_WITH_ELASTICACHE_ENDPOINT"
+  REDIS_PORT: "6379"
+
+  # ── Auth DB (replace with Terraform output: rds_auth_host) ───────────
+  AUTH_POSTGRES_HOST: "REPLACE_WITH_RDS_AUTH_HOST"
+  AUTH_POSTGRES_PORT: "5432"
+  AUTH_POSTGRES_DB:   "auth_db"
+  AUTH_POSTGRES_USER: "postgres"
+
+  # ── Notifications DB ─────────────────────────────────────────────────
+  NOTIF_POSTGRES_HOST: "REPLACE_WITH_RDS_NOTIFICATIONS_HOST"
+  NOTIF_POSTGRES_PORT: "5432"
+  NOTIF_POSTGRES_DB:   "notifications_db"
+  NOTIF_POSTGRES_USER: "postgres"
+
+  # ── Analytics DB ─────────────────────────────────────────────────────
+  ANALYTICS_POSTGRES_HOST: "REPLACE_WITH_RDS_ANALYTICS_HOST"
+  ANALYTICS_POSTGRES_PORT: "5432"
+  ANALYTICS_POSTGRES_DB:   "analytics_db"
+  ANALYTICS_POSTGRES_USER: "postgres"
+
+  # ── General settings ─────────────────────────────────────────────────
+  NODE_ENV:               "production"
+  JWT_EXPIRES_IN:         "7d"
+  RATE_LIMIT_PER_MINUTE:  "300"
+
+  # ── SMTP (replace with your email provider) ───────────────────────────
+  SMTP_HOST: "email-smtp.ap-southeast-2.amazonaws.com"
+  SMTP_PORT: "587"
+  SMTP_FROM: "noreply@yourdomain.com"
