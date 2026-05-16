@@ -14,7 +14,7 @@
     "helmet": "^8.0.0",
     "ioredis": "^5.4.1",
     "pg": "^8.13.0",
-    "uuid": "^10.0.0",
+    "uuid": "^14.0.0",
     "tsconfig-paths": "^4.2.0"
   },
   "devDependencies": {
