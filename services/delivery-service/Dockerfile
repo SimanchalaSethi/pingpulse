@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:25-alpine AS builder
 WORKDIR /app
 COPY shared/src ./shared/src
 COPY shared/package.json ./shared/package.json
@@ -9,7 +9,7 @@ WORKDIR /app/services/delivery-service
 RUN npm install
 RUN npx tsc --project tsconfig.json
 
-FROM node:20-alpine AS production
+FROM node:25-alpine AS production
 WORKDIR /app
 RUN addgroup -S pingpulse && adduser -S pingpulse -G pingpulse
 COPY --from=builder /app/services/delivery-service/package.json ./
